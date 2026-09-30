@@ -30,16 +30,24 @@ Item {
           color: modelData.bg ? s.th.c(modelData.bg) : "transparent"
           clip: true
           Rectangle { width: parent.width; height: 2; color: s.th.fg }
+          // Width left for the label and meta column beside the time.
+          readonly property real room: Math.max(0, area.width - 0.12 * s.lay.rowFs - time.implicitWidth - s.lay.gapPx - 8)
           Row {
             x: 0.12 * s.lay.rowFs
             anchors.verticalCenter: parent.verticalCenter
             spacing: s.lay.gapPx
-            Txt { anchors.verticalCenter: parent.verticalCenter; text: row.modelData.hhmm; fs: s.lay.rowFs; ls: -0.045; color: row.ink; strike: row.modelData.strike }
+            Txt { id: time; anchors.verticalCenter: parent.verticalCenter; text: row.modelData.hhmm; fs: s.lay.rowFs; ls: -0.045; color: row.ink; strike: row.modelData.strike }
             Column {
               anchors.verticalCenter: parent.verticalCenter
               spacing: 0.12 * s.lay.rowFs
-              Txt { text: row.modelData.label; fs: s.lay.rowFs * 0.42; ls: -0.02; color: row.ink; width: Math.min(implicitWidth, area.width * 0.55); elide: Text.ElideRight }
-              Txt { text: row.modelData.meta; fs: s.lay.microFs; ls: 0.2; weight: 700; color: row.ink }
+              Txt { text: row.modelData.label; fs: s.lay.rowFs * 0.42; ls: -0.02; color: row.ink; width: Math.min(implicitWidth, row.room); elide: Text.ElideRight }
+              Column {
+                spacing: 0.35 * s.lay.microFs
+                Repeater {
+                  model: row.modelData.meta
+                  Txt { required property string modelData; text: modelData; fs: s.lay.microFs; ls: 0.2; weight: 700; color: row.ink; width: Math.min(implicitWidth, row.room); elide: Text.ElideRight }
+                }
+              }
             }
           }
           MouseArea { anchors.fill: parent; onClicked: s.app.act(engine => engine.selSet("alarms", row.modelData.idx)) }

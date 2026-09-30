@@ -99,3 +99,16 @@ test('corner labels step down instead of colliding in narrow tiles', () => {
   assert.equal(narrow.microTL, 'TUE 29 SEP');
   assert.equal(narrow.microBR, '07');
 });
+
+test('alarm meta wraps or steps down in narrow rows instead of being cut off', () => {
+  const t = new Date(2026, 8, 30, 7, 54, 5).getTime();
+  const E = createEngine({ now: () => t, localTz: 'Europe/London', direction: { id: 'monolith', faces: ['digits'] } });
+  E.skipBoot();
+  E.parse('a 7:30 gym weekdays').run();
+  E.parse('a 6:30 daily').run();
+  const V = E.view();
+  const meta = W => layout(V, W, 680).alms.map(a => a.meta);
+  assert.deepEqual(meta(1346), [['M T W T F S S · IN 22H 36M'], ['M T W T F · · · IN 23H 36M']]);
+  assert.deepEqual(meta(630), [['M T W T F S S', 'IN 22H 36M'], ['M T W T F · ·', 'IN 23H 36M']]);
+  assert.deepEqual(meta(470), [['DAILY', 'IN 22H 36M'], ['WEEKDAYS', 'IN 23H 36M']]);
+});

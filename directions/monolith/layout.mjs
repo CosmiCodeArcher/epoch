@@ -65,11 +65,20 @@ export function layout(V, W, H) {
   /* alarms */
   const AL = V.alarms.slice(0, stage ? 5 : 4), nA = Math.max(1, AL.length);
   o.rowFs = Math.floor(Math.min((innerH / nA) * 0.78, innerW / 4.6));
-  o.alms = AL.map(a => ({
-    idx: a.idx, hhmm: a.hhmm, label: up(a.label), strike: !a.on,
-    meta: `${a.days ? a.mask.map(m => m.on ? m.l : '·').join(' ') : 'ONCE'} · ${a.on ? up(a.inStr) : 'OFF'}`,
-    bg: a.sel ? 'fg' : null, c: a.sel ? 'bg' : a.on ? 'fg' : 'muted',
-  }));
+  // The meta (`M T W T F · · · IN 17H 02M`) is one line when the row is wide
+  // enough, else the days and the countdown stack on two lines; only when even
+  // that won't fit does it fall back to named days, then the countdown alone.
+  const metaRoom = innerW - 0.12 * o.rowFs - 5 * (CW - 0.045) * o.rowFs - gapPx - 8;
+  const metaFits = lines => lines.every(s => s.length * microFs * (CW + 0.2) <= metaRoom);
+  o.alms = AL.map(a => {
+    const when = a.on ? up(a.inStr) : 'OFF';
+    const days = a.days ? a.mask.map(m => m.on ? m.l : '·').join(' ') : 'ONCE';
+    const forms = [[`${days} · ${when}`], [days, when], [up(a.daysStr), when], [when]];
+    return {
+      idx: a.idx, hhmm: a.hhmm, label: up(a.label), strike: !a.on, meta: forms.find(metaFits) || [when],
+      bg: a.sel ? 'fg' : null, c: a.sel ? 'bg' : a.on ? 'fg' : 'muted',
+    };
+  });
 
   /* timers */
   const T = V.timers, ts = T.find(t => t.sel) || T[0];
