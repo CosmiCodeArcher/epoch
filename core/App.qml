@@ -71,9 +71,13 @@ Scope {
     if (engine) refresh();
   }
 
-  function applyColors(text) {
-    tokens = Th.tokensFromColors(text).tokens;
-    if (!themeName) return;
+  // theme.name and colors.toml load independently and in either order, so each
+  // one calls this and it applies once both are in. The first apply is instant;
+  // every later theme change animates and sweeps.
+  property string colorsText: ""
+  function syncTheme() {
+    if (!themeName || !colorsText) return;
+    tokens = Th.tokensFromColors(colorsText).tokens;
     const id = Eng.themeId(themeName);
     const changed = themeLoaded && engine.theme.id !== id;
     engine.setTheme(id, Eng.themeLabel(id));
@@ -123,7 +127,10 @@ Scope {
     printErrors: false
     onFileChanged: reload()
     onLoaded: {
-      app.themeName = text().trim();
+      const name = text().trim();
+      if (!name) return; // caught mid-rewrite; the next change event has it
+      app.themeName = name;
+      app.syncTheme();
       colorsFile.reload();
       themeList.running = true;
     }
@@ -132,7 +139,7 @@ Scope {
     id: colorsFile
     path: app.omarchyCurrent + "/theme/colors.toml"
     printErrors: false
-    onLoaded: app.applyColors(text())
+    onLoaded: { app.colorsText = text(); app.syncTheme(); }
   }
   Process {
     id: themeList
