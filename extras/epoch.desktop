@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Epoch
+GenericName=Clock
+Comment=Alarms, timers, stopwatch and world clocks for Omarchy
+Exec=@EPOCH_BIN@
+Icon=epoch
+Terminal=false
+Categories=Utility;Clock;
+Keywords=clock;alarm;timer;stopwatch;world;time;
+StartupWMClass=epoch

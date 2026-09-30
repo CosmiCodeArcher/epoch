@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# epoch — launch Epoch and talk to the running instance.
+#
+#   epoch                 open the window (starting Epoch if needed)
+#   epoch toggle          show / hide the window (bind this to a key)
+#   epoch daemon          start in the background with the window hidden (autostart)
+#   epoch pin             toggle a 240×90 widget pinned to every workspace
+#   epoch hide | quit
+#   epoch ring            test the alarm (Esc exits the test)
+#   epoch key <keys>      press keys in the window, e.g. `epoch key ?`
+#   epoch <command>       anything the command bar understands:
+#                           epoch t 25m tea        epoch a 7:30 gym weekdays
+#                           epoch w tokyo          epoch t 25m work && t 5m break
+
+set -euo pipefail
+
+EPOCH_DIR="${EPOCH_DIR:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+
+ipc() { qs -p "$EPOCH_DIR" ipc call epoch "$@"; }
+running() { qs -p "$EPOCH_DIR" ipc show >/dev/null 2>&1; }
+
+start() {
+  running && return 0
+  EPOCH_HIDDEN="${1:-0}" qs -p "$EPOCH_DIR" --no-duplicate --daemonize >/dev/null 2>&1 || true
+  for _ in $(seq 1 50); do running && return 0; sleep 0.1; done
+  echo "epoch: Quickshell didn't start; see 'qs log -p $EPOCH_DIR'" >&2
+  exit 1
+}
+
+# Hyprland 0.56+ takes Lua dispatchers; older builds take the classic syntax.
+hl() { hyprctl dispatch "$1" >/dev/null 2>&1 || hyprctl dispatch $2 >/dev/null 2>&1 || true; }
+W='class:^(epoch)$'
+
+# Toggle the 240×90 pinned widget in the bottom-right corner of the focused monitor.
+pin() {
+  start 0
+  ipc open >/dev/null
+  sleep 0.3
+  if [[ $(hyprctl clients -j | jq -r '[.[] | select(.class == "epoch")][0].pinned') == "true" ]]; then
+    unpin
+    return
+  fi
+  local w=240 h=90 gap=10 x y
+  read -r x y < <(hyprctl monitors -j | jq -r --argjson w $w --argjson h $h --argjson g $gap \
+    '.[] | select(.focused) | "\((.x + .width / .scale - $w - $g - .reserved[2]) | floor) \((.y + .height / .scale - $h - $g - .reserved[3]) | floor)"')
+  hl "hl.dsp.window.float({ window = \"$W\", action = \"set\" })" "setfloating $W"
+  hl "hl.dsp.window.resize({ window = \"$W\", x = $w, y = $h })" "resizewindowpixel exact $w $h,$W"
+  hl "hl.dsp.window.move({ window = \"$W\", x = $x, y = $y })" "movewindowpixel exact $x $y,$W"
+  hl "hl.dsp.window.pin({ window = \"$W\" })" "pin $W"
+}
+
+unpin() {
+  hl "hl.dsp.window.pin({ window = \"$W\" })" "pin $W"
+  hl "hl.dsp.window.float({ window = \"$W\", action = \"unset\" })" "settiled $W"
+}
+
+case "${1:-open}" in
+  open | show) start 0 && ipc open ;;
+  toggle) if running; then ipc toggle; else start 0; fi ;;
+  daemon) start 1 ;;
+  hide) running && ipc close || true ;;
+  quit) qs kill -p "$EPOCH_DIR" >/dev/null 2>&1 || true ;;
+  pin) pin ;;
+  unpin) unpin ;;
+  ring) start 0 && ipc ring ;;
+  key) shift; start 0 && ipc key "$*" ;;
+  -h | --help | help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) start 1 && ipc run "$*" ;;
+esac

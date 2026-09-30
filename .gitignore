@@ -1,0 +1,6 @@
+# Quickshell / qmlls tooling
+.qmlls.ini
+*.qslog
+# editor and OS noise
+.DS_Store
+*.swp
