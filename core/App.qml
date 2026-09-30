@@ -15,6 +15,9 @@ Scope {
   property var engine: null
   property var view: null
   property bool windowOpen: Quickshell.env("EPOCH_HIDDEN") !== "1"
+  // Demo recordings only: EPOCH_CLOCK=<epoch ms> starts Epoch's clock at that
+  // moment (it then runs normally), so re-shot footage can match earlier footage.
+  readonly property real clockOffset: Quickshell.env("EPOCH_CLOCK") ? Number(Quickshell.env("EPOCH_CLOCK")) - Date.now() : 0
 
   property var tokens: Th.FALLBACK
   property string themeName: ""
@@ -88,7 +91,7 @@ Scope {
 
   Component.onCompleted: {
     engine = Eng.createEngine({
-      now: () => Date.now(),
+      now: () => Date.now() + app.clockOffset,
       localTz: "",
       tzOffset: (tz, ms) => { const v = app.tzOffsets[tz]; return v === undefined ? null : v; },
       direction: app.direction,
