@@ -68,6 +68,8 @@ Rectangle {
       Txt { id: head; text: s.lay.dry ? s.lay.dry.head : ""; fs: s.lay.dryFs || 1; ls: -0.01; color: s.th.c(s.lay.dry ? s.lay.dry.c : "fg") }
       Txt {
         x: head.implicitWidth + 0.6 * (s.lay.dryFs || 1)
+        width: Math.max(0, Math.min(implicitWidth, parent.width - x))
+        elide: Text.ElideRight
         anchors.baseline: head.baseline
         text: s.lay.dry ? s.lay.dry.sub : ""; fs: (s.lay.dryFs || 1) * 0.6; ls: 0.14; color: s.th.dim
       }
