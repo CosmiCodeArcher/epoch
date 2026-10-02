@@ -13,7 +13,7 @@ A keyboard-first clock for <a href="https://omarchy.org">Omarchy</a>: alarms, ti
 - **It wears your theme, live.** Epoch reads the active Omarchy theme, and when you switch themes it doesn't just repaint: every color eases to the new palette while an accent slab wipes across the window (above).
 - **The type fills the tile.** There's no fixed type scale. Every number is sized to its box, and the layout changes with the window: a full tile, a half tile (hours stacked over minutes), a floating window, or a 240×90 widget pinned to every workspace.
 - **A command bar, not forms.** Press `:` and type `t 25m tea`, `a 7:30 gym weekdays` or `w tokyo`, with autocomplete, ghost text and a dry run that tells you exactly what Enter will do.
-- **Timers are processes.** Each one gets a PID. Chain them with `&&` (`t 25m work && t 5m break`) and the next one waits, queued, until the last one ends. `k` kills, `u` undoes.
+- **Timers are processes.** Each one gets a PID. Chain them with `then` (`t 25m work then 5m break`) and the next one waits, queued, until the last one ends. `k` kills, `u` undoes.
 - **Alarms you have to be awake to stop.** A ringing alarm takes over the window, flashing, until you type its label backwards. Escape doesn't work. You can snooze, and snooze rings again.
 - **Always on.** Epoch keeps running with the window hidden, so alarms still ring. `SUPER + E` summons it.
 - **Scriptable.** Anything the command bar understands also works from a terminal: `epoch t 12m eggs`.
@@ -73,7 +73,7 @@ Use `--no-hypr` to skip the Hyprland part, or `--uninstall` to remove everything
 
 | Command | Example |
 |---|---|
-| `t <dur> [name]` | `t 25m tea` · `t 1h30m` · `t 90s` · `t 4:30` · `t 25m work && t 5m break` |
+| `t <dur> [name]` | `t 25m tea` · `t 1h30m` · `t 90s` · `t 4:30` · `t 25m work then 5m break` (chain; `&&` works in the bar too) |
 | `a <time> [label] [days]` | `a 7:30 gym weekdays` · `a 6pm call` · `a 0645 run mon,wed,fri` · `a 22:15 read daily` |
 | `w <city>` | `w tokyo` · `w sao` (53 cities, fuzzy matched) |
 | `s [lap\|reset]` | start/stop, lap, reset the stopwatch |
@@ -82,7 +82,7 @@ Use `--no-hypr` to skip the Hyprland part, or `--uninstall` to remove everything
 | `theme <name>` | `theme tokyo-night` (runs `omarchy theme set`) |
 | `ring` | test the alarm |
 
-From a terminal: `epoch <command>`, plus `epoch toggle`, `epoch pin`, `epoch daemon`, `epoch quit` and `epoch --help`.
+From a terminal: `epoch <command>`, e.g. `epoch t 25m work then 5m break`. Chain with `then` there: a shell treats `&&` as its own operator and runs the rest itself (or quote the whole line). Also `epoch toggle`, `epoch pin`, `epoch daemon`, `epoch quit` and `epoch --help`.
 
 ## How it's built
 

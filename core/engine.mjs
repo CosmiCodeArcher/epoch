@@ -357,12 +357,17 @@ export function createEngine(env) {
     for (let k = 0; k < 8; k++) { const x = new Date(d); x.setDate(d.getDate() + k); x.setHours(a.h, a.m, 0, 0); if (x.getTime() > n && (!a.days || a.days[dowIdx(x)])) return x.getTime(); }
     return n + 7 * 864e5;
   }
+  // Timer chains: `t 25m work && t 5m break`. A shell takes `&&` as its own
+  // operator, so `then` chains too (`epoch t 25m work then 5m break`), and each
+  // part after the first may drop its `t`.
+  const CHAIN = /\s*&&\s*|\s+then\s+(?=(?:t|timer)\s|\d)/i;
   const relOff = (tz, n) => { const o = tzOff(tz, n); return o == null ? null : o - localOffset(n); };
   const cityClock = (tz, n) => { const o = tzOff(tz, n); if (o == null) return '--:--'; const p = partsAt(n, o); return p2(p.h) + ':' + p2(p.m); };
   E.parse = text => {
     const s = (text || '').trim(); if (!s) return { ok: false, kind: null, summary: '', detail: '' };
-    if (s.indexOf('&&') >= 0) {
-      const parts = s.split('&&').map(x => E.parse(x));
+    const links = s.split(CHAIN);
+    if (links.length > 1) {
+      const parts = links.map((x, i) => E.parse(i && /^\d/.test(x.trim()) ? 't ' + x : x));
       const ok = parts.length > 1 && parts.every(p => p.ok && p.kind === 'timer');
       return { ok, kind: 'chain', parts, summary: ok ? parts.map(p => `${p.name} ${clockDur(p.dur)}`).join(' → ') : '', detail: ok ? `${parts.length} timers, run in sequence` : '', err: ok ? null : 'chain: every part must be a timer',
         run: () => { pushUndo(); let prev = null; parts.forEach((p, i) => { prev = E.addTimer(p.name, p.dur, i ? { state: 'S', end: 0, parent: prev.pid } : {}); }); say(`spawned ${parts.length} chained timers`); E.go('timers'); } };
@@ -426,7 +431,9 @@ export function createEngine(env) {
   };
   E.suggest = text => {
     const s = text || ''; const sp = s.indexOf(' ');
+    if (/\s+then\s*$/i.test(s)) return [{ fill: s.replace(/\s*$/, ' ') + '5m break', label: '5m break', desc: 'then a break', kind: 'timer' }];
     if (s.indexOf('&&') >= 0) { const tail = s.slice(s.lastIndexOf('&&') + 2).replace(/^\s+/, ''); if (!tail) return [{ fill: s.replace(/\s*$/, ' ') + 't 5m break', label: 't 5m break', desc: 'then a break', kind: 'timer' }]; return []; }
+    if (CHAIN.test(s)) return [];
     if (sp < 0) {
       const q = s.toLowerCase();
       return COMMANDS.filter(c => !q || c.k.startsWith(q) || c.name.startsWith(q)).map(c => ({ fill: c.k + ' ', label: c.sig, desc: c.desc, kind: c.kind }));
@@ -436,8 +443,8 @@ export function createEngine(env) {
     const n = now();
     if (c === 't' || c === 'timer') {
       if (toks.length > 1) return [];
-      const opts = ['25m focus', '5m tea', '12m eggs', '1h', '90s', '25m work && t 5m break'];
-      return opts.filter(o => o.startsWith(rest)).map(o => { const d = parseDur(o.split(' ')[0]); return { fill: c + ' ' + o, label: o, desc: o.indexOf('&&') >= 0 ? 'pomodoro chain' : `ends ${hm(new Date(n + d))}`, kind: 'timer' }; });
+      const opts = ['25m focus', '5m tea', '12m eggs', '1h', '90s', '25m work then 5m break'];
+      return opts.filter(o => o.startsWith(rest)).map(o => { const d = parseDur(o.split(' ')[0]); return { fill: c + ' ' + o, label: o, desc: o.indexOf(' then ') >= 0 ? 'pomodoro chain' : `ends ${hm(new Date(n + d))}`, kind: 'timer' }; });
     }
     if (c === 'a' || c === 'alarm') {
       if (toks.length === 1) return ['7:00', '7:30', '6:45', '9:00', '22:30'].filter(o => o.startsWith(rest)).map(o => { const t = parseTime(o); return { fill: c + ' ' + o + ' ', label: o, desc: relIn(nextOcc({ h: t.h, m: t.m, days: null }, n) - n), kind: 'alarm' }; });

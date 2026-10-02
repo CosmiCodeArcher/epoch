@@ -10,7 +10,8 @@
 #   epoch key <keys>      press keys in the window, e.g. `epoch key ?`
 #   epoch <command>       anything the command bar understands:
 #                           epoch t 25m tea        epoch a 7:30 gym weekdays
-#                           epoch w tokyo          epoch t 25m work && t 5m break
+#                           epoch w tokyo          epoch t 25m work then 5m break
+#                         (chain with `then`: a shell runs `&&` itself)
 
 set -euo pipefail
 
@@ -64,6 +65,6 @@ case "${1:-open}" in
   unpin) unpin ;;
   ring) start 0 && ipc ring ;;
   key) shift; start 0 && ipc key "$*" ;;
-  -h | --help | help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h | --help | help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) start 1 && ipc run "$*" ;;
 esac

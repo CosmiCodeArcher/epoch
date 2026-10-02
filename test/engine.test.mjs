@@ -251,3 +251,21 @@ test('am/pm can be a separate word', () => {
   assert.deepEqual(r.E.alarms.map(a => [a.h, a.m, a.label]), [[7, 0, 'gym'], [18, 25, 'alarm'], [21, 15, 'call']]);
   assert.deepEqual(r.E.alarms[0].days, [1, 1, 1, 1, 1, 0, 0]);
 });
+
+test('timer chains also take `then`, which shells leave alone, and the extra `t` is optional', () => {
+  const r = rig(morning());
+  for (const line of ['t 25m work then 5m break', 't 25m work then t 5m break', 't 25m work && 5m break', 'timer 25m work THEN 5m break']) {
+    const p = r.E.parse(line);
+    assert.equal(p.kind, 'chain', line);
+    assert.equal(p.ok, true, line);
+    assert.equal(p.summary, 'work 25:00 → break 05:00', line);
+  }
+  r.run('t 25m work then 5m break then 25m work');
+  assert.deepEqual(r.E.timers.map(t => [t.name, t.state]), [['work', 'R'], ['break', 'S'], ['work', 'S']]);
+  // `then` inside a name, or at an alarm, isn't a chain
+  assert.equal(r.E.parse('t 5m tea then nap').name, 'tea then nap');
+  assert.equal(r.E.parse('a 7:30 gym then work').label, 'gym then work');
+  // the bar suggests the shell-safe form, and completes a trailing `then`
+  assert.ok(r.E.suggest('t 25m').some(x => x.fill === 't 25m work then 5m break'));
+  assert.equal(r.E.suggest('t 25m work then ')[0].fill, 't 25m work then 5m break');
+});
