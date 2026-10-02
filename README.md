@@ -73,7 +73,7 @@ Use `--no-hypr` to skip the Hyprland part, or `--uninstall` to remove everything
 
 | Command | Example |
 |---|---|
-| `t <dur> [name]` | `t 25m tea` · `t 1h30m` · `t 90s` · `t 4:30` · `t 25m work then 5m break` (chain; `&&` works in the bar too) |
+| `t <dur> [name]` | `t 25m tea` · `t 1h30m` · `t 90s` · `t 4:30` |
 | `a <time> [label] [days]` | `a 7:30 gym weekdays` · `a 6pm call` · `a 0645 run mon,wed,fri` · `a 22:15 read daily` |
 | `w <city>` | `w tokyo` · `w sao` (53 cities, fuzzy matched) |
 | `s [lap\|reset]` | start/stop, lap, reset the stopwatch |
@@ -81,6 +81,16 @@ Use `--no-hypr` to skip the Hyprland part, or `--uninstall` to remove everything
 | `f <face>` | `f words` |
 | `theme <name>` | `theme tokyo-night` (runs `omarchy theme set`) |
 | `ring` | test the alarm |
+
+**Chaining with `then`.** Join commands with `then` and they all happen from one line. Timers queue: each waits for the timer before it. After `then` the `t` is optional, so a bare duration is the next timer; give a command's letter only when the next thing is something else, like an alarm (`a`) or a city (`w`), which are set right away.
+
+```
+t 25m work then 5m break                            work, then a 5 minute break
+t 50m deep then 10m walk then 50m deep              three timers in a row
+t 25m work then 5m break then a 7:30 gym weekdays   two timers, plus an alarm
+```
+
+One `u` undoes the whole line. In the command bar `&&` works the same as `then`.
 
 From a terminal: `epoch <command>`, e.g. `epoch t 25m work then 5m break`. Chain with `then` there: a shell treats `&&` as its own operator and runs the rest itself (or quote the whole line). Also `epoch toggle`, `epoch pin`, `epoch daemon`, `epoch quit` and `epoch --help`.
 

@@ -269,3 +269,31 @@ test('timer chains also take `then`, which shells leave alone, and the extra `t`
   assert.ok(r.E.suggest('t 25m').some(x => x.fill === 't 25m work then 5m break'));
   assert.equal(r.E.suggest('t 25m work then ')[0].fill, 't 25m work then 5m break');
 });
+
+test('one line can mix commands: timers queue, alarms and cities are just set', () => {
+  const r = rig(morning());
+  const p = r.E.parse('t 12m eggs then a 7:45 gym weekdays');
+  assert.equal(p.ok, true);
+  assert.equal(p.summary, 'eggs 12:00 + alarm · 07:45 · gym');
+  r.run('t 25m work then 5m break then a 7:45 gym weekdays then w tokyo then 25m work');
+  assert.deepEqual(r.E.timers.map(t => [t.name, t.state]), [['work', 'R'], ['break', 'S'], ['work', 'S']]);
+  assert.equal(r.E.timers[2].parent, r.E.timers[1].pid, 'the last timer waits for the break, not the alarm');
+  assert.deepEqual(r.E.alarms.map(a => [a.h, a.m, a.label]), [[7, 45, 'gym']]);
+  assert.deepEqual(r.E.world, ['tokyo']);
+  assert.equal(r.E.screen, 'timers');
+  assert.match(r.E.echo.text, /set 3 timers \+ 1 alarm \+ 1 city/);
+  r.key('u');
+  assert.equal(r.E.timers.length + r.E.alarms.length + r.E.world.length, 0, 'one undo reverts the whole line');
+  // an alarm first, then a timer: the timer still starts now
+  r.run('a 6pm call then 5m tea');
+  assert.equal(r.E.timers[0].state, 'R');
+  assert.equal(r.E.screen, 'timers');
+  // `then` before an ordinary word is part of the name; before a command it chains
+  assert.equal(r.E.parse('t 5m tea then nap').name, 'tea then nap');
+  assert.equal(r.E.parse('t 5m tea then a nap').err, `can't read time "nap"`);
+  // errors name the broken part
+  assert.equal(r.E.parse('t 25m work then a 25:99').err, `can't read time "25:99"`);
+  // suggestions follow the last command in the line
+  assert.equal(r.E.suggest('t 25m work then a 7:3')[0].fill, 't 25m work then a 7:30 ');
+  assert.equal(r.E.suggest('t 25m work then 5')[0].fill, 't 25m work then 5m tea');
+});

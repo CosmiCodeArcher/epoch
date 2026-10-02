@@ -211,7 +211,8 @@ export function createEngine(env) {
   const say = (text, err) => { E.echo = { text, err: !!err, t: now() }; };
   E.say = say;
   const snap = () => JSON.stringify({ timers: E.timers, alarms: E.alarms, world: E.world });
-  const pushUndo = () => { E.undoStack.push(snap()); if (E.undoStack.length > 30) E.undoStack.shift(); };
+  let undoMuted = false; // set while a multi-command line runs, so one `u` undoes it all
+  const pushUndo = () => { if (undoMuted) return; E.undoStack.push(snap()); if (E.undoStack.length > 30) E.undoStack.shift(); };
   E.undo = () => { const s = E.undoStack.pop(); if (!s) { say('already at oldest change', true); return; } const o = JSON.parse(s); E.timers = o.timers; E.alarms = o.alarms; E.world = o.world; clampSel(); say('undo · 1 change reverted'); };
 
   /* persistence: plain JSON, written by the host whenever it changes */
@@ -357,21 +358,45 @@ export function createEngine(env) {
     for (let k = 0; k < 8; k++) { const x = new Date(d); x.setDate(d.getDate() + k); x.setHours(a.h, a.m, 0, 0); if (x.getTime() > n && (!a.days || a.days[dowIdx(x)])) return x.getTime(); }
     return n + 7 * 864e5;
   }
-  // Timer chains: `t 25m work && t 5m break`. A shell takes `&&` as its own
-  // operator, so `then` chains too (`epoch t 25m work then 5m break`), and each
-  // part after the first may drop its `t`.
-  const CHAIN = /\s*&&\s*|\s+then\s+(?=(?:t|timer)\s|\d)/i;
+  // One line can hold several commands joined by `then` (or `&&`, which a shell
+  // would take as its own operator). Timers queue, each waiting for the timer
+  // before it; alarms and cities are just set. After `then`, a bare duration is
+  // another timer, so its `t` is optional: `t 25m work then 5m break then a 7:30 gym`.
+  const CHAIN = /\s*&&\s*|\s+then\s+(?=(?:t|timer|a|alarm|w|world)\s|\d)/i;
+  const CHAINABLE = ['timer', 'alarm', 'world'];
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  function parseChain(s, links) {
+    const parts = links.map((x, i) => parseOne(i && /^\d/.test(x.trim()) ? 't ' + x : x));
+    const ok = parts.every(p => p.ok && CHAINABLE.indexOf(p.kind) >= 0);
+    const timers = parts.filter(p => p.kind === 'timer'), alarms = parts.filter(p => p.kind === 'alarm'), cities = parts.filter(p => p.kind === 'world');
+    const summary = [timers.map(p => `${p.name} ${clockDur(p.dur)}`).join(' → ')].concat(alarms.concat(cities).map(p => p.summary)).filter(x => x).join(' + ');
+    const detail = [timers.length > 1 ? `${timers.length} timers, run in sequence` : '', alarms.length ? alarms.map(p => p.detail).join(', ') : ''].filter(x => x).join(' · ');
+    return { ok, kind: 'chain', parts, summary: ok ? summary : '', detail: ok ? detail : '',
+      err: ok ? null : (parts.find(p => !p.ok) || {}).err || 'chain: timers, alarms and cities only',
+      run: () => {
+        pushUndo(); undoMuted = true;
+        let prev = null, first = null;
+        parts.forEach(p => {
+          if (p.kind === 'timer') { prev = E.addTimer(p.name, p.dur, prev ? { state: 'S', end: 0, parent: prev.pid } : {}); first = first || prev; }
+          else if (p.kind === 'alarm') E.addAlarm({ h: p.h, m: p.m, label: p.label, days: p.days });
+          else E.addWorld(p.city.id);
+        });
+        undoMuted = false;
+        if (first) E.sel.timers = E.timers.indexOf(first);
+        say(timers.length && !alarms.length && !cities.length ? `spawned ${timers.length} chained timers`
+          : 'set ' + [timers.length ? plural(timers.length, 'timer') : '', alarms.length ? plural(alarms.length, 'alarm') : '', cities.length ? plural(cities.length, 'city').replace('citys', 'cities') : ''].filter(x => x).join(' + '));
+        E.go(timers.length ? 'timers' : alarms.length ? 'alarms' : 'world');
+      } };
+  }
   const relOff = (tz, n) => { const o = tzOff(tz, n); return o == null ? null : o - localOffset(n); };
   const cityClock = (tz, n) => { const o = tzOff(tz, n); if (o == null) return '--:--'; const p = partsAt(n, o); return p2(p.h) + ':' + p2(p.m); };
   E.parse = text => {
     const s = (text || '').trim(); if (!s) return { ok: false, kind: null, summary: '', detail: '' };
     const links = s.split(CHAIN);
-    if (links.length > 1) {
-      const parts = links.map((x, i) => E.parse(i && /^\d/.test(x.trim()) ? 't ' + x : x));
-      const ok = parts.length > 1 && parts.every(p => p.ok && p.kind === 'timer');
-      return { ok, kind: 'chain', parts, summary: ok ? parts.map(p => `${p.name} ${clockDur(p.dur)}`).join(' → ') : '', detail: ok ? `${parts.length} timers, run in sequence` : '', err: ok ? null : 'chain: every part must be a timer',
-        run: () => { pushUndo(); let prev = null; parts.forEach((p, i) => { prev = E.addTimer(p.name, p.dur, i ? { state: 'S', end: 0, parent: prev.pid } : {}); }); say(`spawned ${parts.length} chained timers`); E.go('timers'); } };
-    }
+    return links.length > 1 ? parseChain(s, links) : parseOne(s);
+  };
+  function parseOne(text) {
+    const s = (text || '').trim(); if (!s) return { ok: false, kind: null, summary: '', detail: '' };
     const tok = s.split(/\s+/), c = tok[0].toLowerCase(), rest = tok.slice(1);
     const n = now();
     if (c === 't' || c === 'timer') {
@@ -433,7 +458,13 @@ export function createEngine(env) {
     const s = text || ''; const sp = s.indexOf(' ');
     if (/\s+then\s*$/i.test(s)) return [{ fill: s.replace(/\s*$/, ' ') + '5m break', label: '5m break', desc: 'then a break', kind: 'timer' }];
     if (s.indexOf('&&') >= 0) { const tail = s.slice(s.lastIndexOf('&&') + 2).replace(/^\s+/, ''); if (!tail) return [{ fill: s.replace(/\s*$/, ' ') + 't 5m break', label: 't 5m break', desc: 'then a break', kind: 'timer' }]; return []; }
-    if (CHAIN.test(s)) return [];
+    // In a multi-command line, suggest for the last command and keep the rest.
+    const G = new RegExp(CHAIN.source, 'gi'); let m, cut = -1;
+    while ((m = G.exec(s))) cut = m.index + m[0].length;
+    if (cut > 0) {
+      const head = s.slice(0, cut), tail = s.slice(cut), bare = /^\d/.test(tail);
+      return E.suggest(bare ? 't ' + tail : tail).map(x => assign({}, x, { fill: head + (bare ? x.fill.replace(/^t /, '') : x.fill) }));
+    }
     if (sp < 0) {
       const q = s.toLowerCase();
       return COMMANDS.filter(c => !q || c.k.startsWith(q) || c.name.startsWith(q)).map(c => ({ fill: c.k + ' ', label: c.sig, desc: c.desc, kind: c.kind }));
